@@ -44,15 +44,30 @@ add_action( 'rest_api_init', function () {
         'permission_callback' => '__return_true', // publik, tanpa login
     ] );
 
-    // GET /wp-json/toko/v1/products  (opsional: ?category_id=1)
+    // GET dan POST /wp-json/toko/v1/products
     register_rest_route( 'toko/v1', '/products', [
-        'methods'             => 'GET',
-        'callback'            => 'toko_api_get_products',
-        'permission_callback' => '__return_true',
-        'args'                => [
-            'category_id' => [
-                'required'          => false,
-                'sanitize_callback' => 'absint', // paksa jadi angka positif
+        [
+            // GET: daftar produk (opsional: ?category_id=1)
+            'methods'             => WP_REST_Server::READABLE,
+            'callback'            => 'toko_api_get_products',
+            'permission_callback' => '__return_true',
+            'args'                => [
+                'category_id' => [
+                    'required'          => false,
+                    'sanitize_callback' => 'absint',
+                ],
+            ],
+        ],
+        [
+            // POST: tambah produk (simulasi, tidak disimpan)
+            'methods'             => WP_REST_Server::CREATABLE,
+            'callback'            => 'toko_api_create_product',
+            'permission_callback' => '__return_true',
+            'args'                => [
+                'name'        => [ 'required' => true, 'type' => 'string',  'sanitize_callback' => 'sanitize_text_field' ],
+                'price'       => [ 'required' => true, 'type' => 'integer', 'minimum' => 0 ],
+                'stock'       => [ 'required' => true, 'type' => 'integer', 'minimum' => 0 ],
+                'category_id' => [ 'required' => true, 'type' => 'integer' ],
             ],
         ],
     ] );
@@ -108,4 +123,40 @@ function toko_api_get_product( WP_REST_Request $request ) {
         'Produk tidak ditemukan',
         [ 'status' => 404 ]
     );
+}
+
+function toko_api_create_product( WP_REST_Request $request ) {
+    $category_id = (int) $request['category_id'];
+
+    // Pastikan kategorinya ada di data hardcode
+    $found = false;
+    foreach ( toko_api_categories() as $category ) {
+        if ( $category['id'] === $category_id ) {
+            $found = true;
+            break;
+        }
+    }
+
+    if ( ! $found ) {
+        return new WP_Error(
+            'toko_category_not_found',
+            'Kategori tidak ditemukan',
+            [ 'status' => 422 ]
+        );
+    }
+
+    // Data hardcode: ID baru ditentukan di kode dan produk TIDAK disimpan.
+    $product = [
+        'id'          => count( toko_api_products() ) + 1,
+        'name'        => $request['name'],
+        'price'       => (int) $request['price'],
+        'stock'       => (int) $request['stock'],
+        'category_id' => $category_id,
+    ];
+
+    return new WP_REST_Response( [
+        'success' => true,
+        'message' => 'Produk berhasil dibuat (simulasi, tidak disimpan)',
+        'data'    => $product,
+    ], 201 );
 }
